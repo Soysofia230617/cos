@@ -129,7 +129,7 @@ DoubleDouble atan_dd(DoubleDouble x) {
     // Для больших значений нужно использовать более сложные методы
     // Здесь используем стандартный atan для hi части
     double at = std::atan(x.hi);
-    return {at, 0.0}; // Упрощение, для точности нужно добавить поправку
+    return {at, 0.0}; // Упрощение, для точности 
 }
 
 void cordic(DoubleDouble theta, DoubleDouble* cos_val, DoubleDouble* sin_val) {
