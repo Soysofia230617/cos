@@ -28,14 +28,26 @@ DoubleDouble dd_from_double(double x) {
 // Сложение DoubleDouble чисел
 DoubleDouble dd_add(const DoubleDouble& a, const DoubleDouble& b) {
     double hi = a.hi + b.hi;
-    double lo = a.lo + b.lo + ((a.hi - hi) + (b.hi - b.hi));
+    double v = hi - a.hi;  // Virtual rounding point
+    double lo = (a.hi - (hi - v)) + (b.hi - v);  // Error terms
+    lo += a.lo + b.lo;  // Add low parts
+    // Normalize the result
+    double t = hi + lo;
+    lo = lo - (t - hi);
+    hi = t;
     return { hi, lo };
 }
 
 // Вычитание DoubleDouble чисел
 DoubleDouble dd_sub(const DoubleDouble& a, const DoubleDouble& b) {
     double hi = a.hi - b.hi;
-    double lo = a.lo - b.lo + ((a.hi - hi) - (b.hi - b.hi));
+    double v = hi - a.hi;  // Virtual rounding point
+    double lo = (a.hi - (hi - v)) - (b.hi + v);  // Error terms
+    lo += a.lo - b.lo;  // Add low parts
+    // Normalize the result
+    double t = hi + lo;
+    lo = lo - (t - hi);
+    hi = t;
     return { hi, lo };
 }
 
@@ -106,8 +118,78 @@ DoubleDouble dd_cos(const DoubleDouble& x) {
     }
     return sum;
 }
+void testDoubleDoubleOperations() {
+    std::cout << "Testing DoubleDouble Arithmetic Operations\n";
+    std::cout << "=======================================\n";
+    std::cout.precision(40);
 
+    // Test 1: Addition
+    {
+        DoubleDouble a = dd_from_double(1.23456789);
+        DoubleDouble b = dd_from_double(2.34567890);
+        DoubleDouble result = dd_add(a, b);
+        double expected = 1.23456789 + 2.34567890;
+        double actual = result.hi + result.lo;
+        std::cout << "Addition Test:\n";
+        std::cout << a.hi << " + " << b.hi << " = " << actual << "\n";
+        std::cout << "Expected: " << expected << "\n";
+        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+    }
+
+    // Test 2: Subtraction
+    {
+        DoubleDouble a = dd_from_double(3.1415926535);
+        DoubleDouble b = dd_from_double(1.4142135623);
+        DoubleDouble result = dd_sub(a, b);
+        double expected = 3.1415926535 - 1.4142135623;
+        double actual = result.hi + result.lo;
+        std::cout << "Subtraction Test:\n";
+        std::cout << a.hi << " - " << b.hi << " = " << actual << "\n";
+        std::cout << "Expected: " << expected << "\n";
+        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+    }
+
+    // Test 3: Multiplication
+    {
+        DoubleDouble a = dd_from_double(2.7182818284);
+        DoubleDouble b = dd_from_double(1.4142135623);
+        DoubleDouble result = dd_mul(a, b);
+        double expected = 2.7182818284 * 1.4142135623;
+        double actual = result.hi + result.lo;
+        std::cout << "Multiplication Test:\n";
+        std::cout << a.hi << " * " << b.hi << " = " << actual << "\n";
+        std::cout << "Expected: " << expected << "\n";
+        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+    }
+
+    // Test 4: Division
+    {
+        DoubleDouble a = dd_from_double(3.1415926535);
+        DoubleDouble b = dd_from_double(2.0);
+        DoubleDouble result = dd_div(a, b);
+        double expected = 3.1415926535 / 2.0;
+        double actual = result.hi + result.lo;
+        std::cout << "Division Test:\n";
+        std::cout << a.hi << " / " << b.hi << " = " << actual << "\n";
+        std::cout << "Expected: " << expected << "\n";
+        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+    }
+    // Test 5: Absolute Value
+    {
+        DoubleDouble a = dd_from_double(-2.7182818284);
+        DoubleDouble result = dd_abs(a);
+        double expected = std::abs(-2.7182818284);
+        double actual = result.hi + result.lo;
+        std::cout << "Absolute Value Test:\n";
+        std::cout << "abs(" << a.hi << ") = " << actual << "\n";
+        std::cout << "Expected: " << expected << "\n";
+        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+    }
+}
 int main() {
+    // Run tests first
+    //testDoubleDoubleOperations();
+
     cout.precision(40);
     double x;
 
