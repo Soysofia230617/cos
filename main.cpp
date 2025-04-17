@@ -2,7 +2,8 @@
 #include <cmath>
 #include <cassert>
 #include <limits>
-
+#include <iomanip>
+#include <cstdint>
 using namespace std;
 
 struct DoubleDouble {
@@ -13,7 +14,34 @@ struct DoubleDouble {
 // Константа для числа π
 const double m_PI = 3.141592653589793238462643383279502884197169399375105820974944;
 
-// Функции для работы с Double-Double числами
+// Функция для вывода двоичного представления числа IEEE 754
+void printBinaryIEEE754(double x) {
+    // Преобразуем double в 64-битное представление
+    union {
+        double d;
+        uint64_t bits;
+    } u;
+    u.d = x;
+
+    // Извлекаем знак, экспоненту и мантиссу
+    uint64_t sign = (u.bits >> 63) & 1;
+    uint64_t exponent = (u.bits >> 52) & 0x7FF; // 11 бит
+    uint64_t mantissa = u.bits & 0xFFFFFFFFFFFFF; // 52 бита
+
+    cout << "Binary IEEE 754 representation:\n";
+    cout << "Sign: " << sign << "\n";
+    cout << "Exponent (biased, 11 bits): ";
+    for (int i = 10; i >= 0; --i) {
+        cout << ((exponent >> i) & 1);
+    }
+    cout << " (decimal: " << exponent << ", actual: " << (exponent - 1023) << ")\n";
+    cout << "Mantissa (52 bits + implicit 1): 1.";
+    for (int i = 51; i >= 0; --i) {
+        cout << ((mantissa >> i) & 1);
+        if (i % 4 == 0) cout << " "; // Для читаемости
+    }
+    cout << "\n";
+}
 
 // Преобразование int в DoubleDouble
 DoubleDouble dd_from_int(int x) {
@@ -28,10 +56,9 @@ DoubleDouble dd_from_double(double x) {
 // Сложение DoubleDouble чисел
 DoubleDouble dd_add(const DoubleDouble& a, const DoubleDouble& b) {
     double hi = a.hi + b.hi;
-    double v = hi - a.hi;  // Virtual rounding point
-    double lo = (a.hi - (hi - v)) + (b.hi - v);  // Error terms
-    lo += a.lo + b.lo;  // Add low parts
-    // Normalize the result
+    double v = hi - a.hi;
+    double lo = (a.hi - (hi - v)) + (b.hi - v);
+    lo += a.lo + b.lo;
     double t = hi + lo;
     lo = lo - (t - hi);
     hi = t;
@@ -41,10 +68,9 @@ DoubleDouble dd_add(const DoubleDouble& a, const DoubleDouble& b) {
 // Вычитание DoubleDouble чисел
 DoubleDouble dd_sub(const DoubleDouble& a, const DoubleDouble& b) {
     double hi = a.hi - b.hi;
-    double v = hi - a.hi;  // Virtual rounding point
-    double lo = (a.hi - (hi - v)) - (b.hi + v);  // Error terms
-    lo += a.lo - b.lo;  // Add low parts
-    // Normalize the result
+    double v = hi - a.hi;
+    double lo = (a.hi - (hi - v)) - (b.hi + v);
+    lo += a.lo - b.lo;
     double t = hi + lo;
     lo = lo - (t - hi);
     hi = t;
@@ -81,17 +107,13 @@ DoubleDouble dd_mod(const DoubleDouble& a, const DoubleDouble& b) {
 
 // Основная функция вычисления косинуса с помощью DoubleDouble
 DoubleDouble dd_cos(const DoubleDouble& x) {
-    if (x.lo == 0.0) {
-        return dd_from_double(std::cos(x.hi));
-    }
+    DoubleDouble r = dd_mod(x, dd_from_double(2.0 * m_PI)); // Ожидаем значение в пределах 0..2π
 
-    DoubleDouble r = dd_mod(x, dd_from_double(2.0 * M_PI)); // Ожидаем значение в пределах 0..2π
-
-    if (r.hi > M_PI) {
-        r = dd_sub(r, dd_from_double(2.0 * M_PI)); // Сворачиваем значение в диапазон [-π, π]
+    if (r.hi > m_PI) {
+        r = dd_sub(r, dd_from_double(2.0 * m_PI)); // Сворачиваем значение в диапазон [-π, π]
     }
-    else if (r.hi < -M_PI) {
-        r = dd_add(r, dd_from_double(2.0 * M_PI));
+    else if (r.hi < -m_PI) {
+        r = dd_add(r, dd_from_double(2.0 * m_PI));
     }
 
     DoubleDouble sum = dd_from_double(1.0);
@@ -118,102 +140,198 @@ DoubleDouble dd_cos(const DoubleDouble& x) {
     }
     return sum;
 }
-void testDoubleDoubleOperations() {
-    std::cout << "Testing DoubleDouble Arithmetic Operations\n";
-    std::cout << "=======================================\n";
-    std::cout.precision(40);
+
+// Функция для вывода значений DoubleDouble с заданной точностью
+void printDoubleDouble(const DoubleDouble& dd, int precision) {
+    cout  << setprecision(precision) << dd.hi << endl;
+    cout  << setprecision(precision) << dd.lo << endl;
+    cout  << setprecision(precision) << fmod(dd.hi * pow(10, 16), 10.) + dd.lo * pow(10, 16) << endl;
+}
+
+// Функция тестирования операций DoubleDouble
+void testDoubleDoubleOperations(int precision) {
+    cout << "Testing DoubleDouble Arithmetic Operations\n";
+    cout << "=======================================\n";
+    cout.precision(40);
 
     // Test 1: Addition
     {
-        DoubleDouble a = dd_from_double(1.23456789);
-        DoubleDouble b = dd_from_double(2.34567890);
+        cout << "\n=== Addition Test ===\n";
+        DoubleDouble a = dd_from_double(1.234567890123456789);
+        DoubleDouble b = dd_from_double(2.345678901234567890);
         DoubleDouble result = dd_add(a, b);
-        double expected = 1.23456789 + 2.34567890;
+        double expected = 1.234567890123456789 + 2.345678901234567890;
         double actual = result.hi + result.lo;
-        std::cout << "Addition Test:\n";
-        std::cout << a.hi << " + " << b.hi << " = " << actual << "\n";
-        std::cout << "Expected: " << expected << "\n";
-        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
-    }
 
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "Input b:\n";
+        printBinaryIEEE754(b.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
+    }
     // Test 2: Subtraction
     {
-        DoubleDouble a = dd_from_double(3.1415926535);
-        DoubleDouble b = dd_from_double(1.4142135623);
+        cout << "\n=== Subtraction Test ===\n";
+        DoubleDouble a = dd_from_double(3.14159265358979323846);
+        DoubleDouble b = dd_from_double(1.41421356237309504880);
         DoubleDouble result = dd_sub(a, b);
-        double expected = 3.1415926535 - 1.4142135623;
+        double expected = 3.14159265358979323846 - 1.41421356237309504880;
         double actual = result.hi + result.lo;
-        std::cout << "Subtraction Test:\n";
-        std::cout << a.hi << " - " << b.hi << " = " << actual << "\n";
-        std::cout << "Expected: " << expected << "\n";
-        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
-    }
 
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "Input b:\n";
+        printBinaryIEEE754(b.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
+    }
     // Test 3: Multiplication
     {
-        DoubleDouble a = dd_from_double(2.7182818284);
-        DoubleDouble b = dd_from_double(1.4142135623);
+        cout << "\n=== Multiplication Test ===\n";
+        DoubleDouble a = dd_from_double(2.71828182845904523536);
+        DoubleDouble b = dd_from_double(1.41421356237309504880);
         DoubleDouble result = dd_mul(a, b);
-        double expected = 2.7182818284 * 1.4142135623;
+        double expected = 2.71828182845904523536 * 1.41421356237309504880;
         double actual = result.hi + result.lo;
-        std::cout << "Multiplication Test:\n";
-        std::cout << a.hi << " * " << b.hi << " = " << actual << "\n";
-        std::cout << "Expected: " << expected << "\n";
-        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
-    }
 
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "Input b:\n";
+        printBinaryIEEE754(b.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
+    }
     // Test 4: Division
     {
-        DoubleDouble a = dd_from_double(3.1415926535);
+        cout << "\n=== Division Test ===\n";
+        DoubleDouble a = dd_from_double(3.14159265358979323846);
         DoubleDouble b = dd_from_double(2.0);
         DoubleDouble result = dd_div(a, b);
-        double expected = 3.1415926535 / 2.0;
+        double expected = 3.14159265358979323846 / 2.0;
         double actual = result.hi + result.lo;
-        std::cout << "Division Test:\n";
-        std::cout << a.hi << " / " << b.hi << " = " << actual << "\n";
-        std::cout << "Expected: " << expected << "\n";
-        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "Input b:\n";
+        printBinaryIEEE754(b.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
     }
     // Test 5: Absolute Value
     {
-        DoubleDouble a = dd_from_double(-2.7182818284);
+        cout << "\n=== Absolute Value Test ===\n";
+        DoubleDouble a = dd_from_double(-2.71828182845904523536);
         DoubleDouble result = dd_abs(a);
-        double expected = std::abs(-2.7182818284);
+        double expected = std::abs(-2.71828182845904523536);
         double actual = result.hi + result.lo;
-        std::cout << "Absolute Value Test:\n";
-        std::cout << "abs(" << a.hi << ") = " << actual << "\n";
-        std::cout << "Expected: " << expected << "\n";
-        std::cout << "Absolute error: " << std::abs(actual - expected) << "\n\n";
+
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
+    }
+    // Test 6: Modulo Operation
+    {
+        cout << "\n=== Modulo Operation Test ===\n";
+        DoubleDouble a = dd_from_double(10.5);
+        DoubleDouble b = dd_from_double(3.0);
+        DoubleDouble result = dd_mod(a, b);
+        double expected = fmod(10.5, 3.0);
+        double actual = result.hi + result.lo;
+
+        cout << "Input a:\n";
+        printBinaryIEEE754(a.hi);
+        cout << "Input b:\n";
+        printBinaryIEEE754(b.hi);
+        cout << "DoubleDouble result:\n";
+        printDoubleDouble(result, precision);
+        cout << "Binary representation of result.hi:\n";
+        printBinaryIEEE754(result.hi);
+        cout << "Binary representation of result.lo:\n";
+        printBinaryIEEE754(result.lo);
+        cout << "Standard double result: " << expected << "\n";
+        cout << "Absolute error: " << std::abs(actual - expected) << "\n";
+    }
+    // Test 7: Binary Representation of a Special Case (small number)
+    {
+        cout << "\n=== Small Number Binary Representation Test ===\n";
+        double small = 1.0e-300; // Очень малое число
+        DoubleDouble a = dd_from_double(small);
+        cout << "Input small number: " << setprecision(20) << small << "\n";
+        printBinaryIEEE754(a.hi);
+        cout << "DoubleDouble representation:\n";
+        printDoubleDouble(a, precision);
     }
 }
+int computeErrorOrder(const DoubleDouble& error) {
+    double abs_error = std::abs(error.hi + error.lo);
+    if (abs_error == 0.0) {
+        return 0; // Порядок не определён для нулевой ошибки
+    }
+    return static_cast<int>(std::floor(std::log10(abs_error)));
+}
 int main() {
-    // Run tests first
-    //testDoubleDoubleOperations();
+    int precision=19;
 
-    cout.precision(40);
+
+    // Запускаем тесты
+    testDoubleDoubleOperations(precision);
+    return 0;
     double x;
-
-    while (true) {
-        cout << "Enter x (Ctrl+D/Ctrl+Z to exit): ";
-        if (cin >> x) {
-            DoubleDouble input = dd_from_double(x);
-            DoubleDouble my_result = dd_cos(input);
-            double std_result = std::cos(x);
-            double dd_full = my_result.hi + my_result.lo;
-            double abs_error = std::abs(dd_full - std_result);
-
-            cout << "dd_cos( x )  = " << dd_full << endl;
-            cout << "std::cos( x ) = " << std_result << endl;
-            cout << "abs error             = " << abs_error << endl;
-            cout << "------------------------------------------" << endl;
-        } else if (cin.eof()) {
-            // Выход при Ctrl+D/Ctrl+Z
-            break;
+    cout << "Enter x (non-numeric input to exit): ";
+    while (cin >> x) {
+        DoubleDouble input = dd_from_double(x);
+        DoubleDouble my_result = dd_cos(input);
+        DoubleDouble std_result = dd_from_double(std::cos(x));
+        DoubleDouble abs_error = dd_abs(dd_sub(my_result, std_result));
+        int error_order = computeErrorOrder(abs_error);
+        cout << "x = " << setprecision(precision) << x << endl;
+        cout << "dd_cos(x):\n";
+        printDoubleDouble(my_result, precision);
+        cout << "std::cos(x):\n";
+        printDoubleDouble(std_result, precision);
+        cout << "Absolute error:\n";
+        printDoubleDouble(abs_error, precision);
+        if (error_order == 0 && (abs_error.hi + abs_error.lo) == 0.0) {
+            cout << "Error order: undefined (error is zero)\n";
         } else {
-            cout << "Ошибка: введите число\n";
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Error order: " << error_order << "\n";
         }
+        cout << "------------------------------------------" << endl;
+        cout << "Enter x (non-numeric input to exit): ";
     }
 
     return 0;
